@@ -99,9 +99,21 @@ func (m *Manager) Get(path string) (*model.Resource, error) {
 	m.mu.RUnlock()
 	if ok {
 		copy := item
+		copy.Labels = cloneLabels(item.Labels)
 		return &copy, nil
 	}
 	return nil, ErrNotFound
+}
+
+func cloneLabels(labels map[string]string) map[string]string {
+	if labels == nil {
+		return nil
+	}
+	out := make(map[string]string, len(labels))
+	for k, v := range labels {
+		out[k] = v
+	}
+	return out
 }
 
 func (m *Manager) List(root string) ([]model.Resource, error) {
