@@ -61,7 +61,7 @@ func (m *Manager) Register(req model.ResourceCreateRequest) (*model.Resource, er
 		}
 	}
 	now := time.Now().UTC()
-	item := &model.Resource{Path: path, ParentPath: parent, Owner: req.Owner, State: model.ResourceActive, Generation: 1, Labels: req.Labels, CreatedAt: now, UpdatedAt: now}
+	item := &model.Resource{Path: path, ParentPath: parent, Owner: req.Owner, State: model.ResourceActive, Generation: 1, Labels: copyLabels(req.Labels), CreatedAt: now, UpdatedAt: now}
 	if existing, _ := m.store.GetResource(path); existing != nil {
 		return existing, nil
 	}
@@ -130,4 +130,18 @@ func namespaceOrder(items []model.Resource) []model.Resource {
 		}
 	}
 	return items
+}
+
+// copyLabels returns a detached copy of in so that later mutation of the
+// caller's map cannot affect the stored resource. A nil input stays nil to
+// preserve the empty-vs-absent distinction carried by the json omitempty tag.
+func copyLabels(in map[string]string) map[string]string {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
