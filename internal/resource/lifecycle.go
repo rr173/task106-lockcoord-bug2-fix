@@ -37,7 +37,8 @@ func (m *Manager) SetState(path string, next model.ResourceState, reason string)
 	}
 	m.resources[item.Path] = *item
 	_ = m.store.RecordCoordinationEvent("resource_state_changed", item.Path, item.Owner, fmt.Sprintf("%s: %s", next, reason))
-	return item, nil
+	out := cloneResource(*item)
+	return &out, nil
 }
 
 func validTransition(from, to model.ResourceState) bool {

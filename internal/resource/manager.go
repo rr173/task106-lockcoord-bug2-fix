@@ -61,9 +61,10 @@ func (m *Manager) Register(req model.ResourceCreateRequest) (*model.Resource, er
 		}
 	}
 	now := time.Now().UTC()
-	item := &model.Resource{Path: path, ParentPath: parent, Owner: req.Owner, State: model.ResourceActive, Generation: 1, Labels: req.Labels, CreatedAt: now, UpdatedAt: now}
+	item := &model.Resource{Path: path, ParentPath: parent, Owner: req.Owner, State: model.ResourceActive, Generation: 1, Labels: cloneLabels(req.Labels), CreatedAt: now, UpdatedAt: now}
 	if existing, _ := m.store.GetResource(path); existing != nil {
-		return existing, nil
+		out := cloneResource(*existing)
+		return &out, nil
 	}
 	if err := m.store.UpsertResource(item); err != nil {
 		return nil, err
@@ -72,7 +73,8 @@ func (m *Manager) Register(req model.ResourceCreateRequest) (*model.Resource, er
 	m.resources[path] = *item
 	m.mu.Unlock()
 	_ = m.store.RecordCoordinationEvent("resource_registered", path, req.Owner, "resource registered")
-	return item, nil
+	out := cloneResource(*item)
+	return &out, nil
 }
 
 func (m *Manager) Ensure(path, owner string) (*model.Resource, error) {
@@ -84,7 +86,8 @@ func (m *Manager) Ensure(path, owner string) (*model.Resource, error) {
 	item, ok := m.resources[normalized]
 	m.mu.RUnlock()
 	if ok {
-		return &item, nil
+		out := cloneResource(item)
+		return &out, nil
 	}
 	return m.Register(model.ResourceCreateRequest{Path: normalized, Owner: owner})
 }
@@ -98,9 +101,8 @@ func (m *Manager) Get(path string) (*model.Resource, error) {
 	item, ok := m.resources[path]
 	m.mu.RUnlock()
 	if ok {
-		copy := item
-		copy.Labels = cloneLabels(item.Labels)
-		return &copy, nil
+		out := cloneResource(item)
+		return &out, nil
 	}
 	return nil, ErrNotFound
 }
@@ -116,6 +118,15 @@ func cloneLabels(labels map[string]string) map[string]string {
 	return out
 }
 
+// cloneResource returns a shallow copy of r whose Labels map is independent
+// of r's, so callers can mutate the returned resource's labels without
+// affecting the manager's internal cache (or the value returned by the next
+// read).
+func cloneResource(r model.Resource) model.Resource {
+	r.Labels = cloneLabels(r.Labels)
+	return r
+}
+
 func (m *Manager) List(root string) ([]model.Resource, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -129,7 +140,7 @@ func (m *Manager) List(root string) ([]model.Resource, error) {
 	}
 	for _, item := range m.resources {
 		if root == "" || namespace.IsSameOrDescendant(item.Path, root) {
-			items = append(items, item)
+			items = append(items, cloneResource(item))
 		}
 	}
 	return namespaceOrder(items), nil
